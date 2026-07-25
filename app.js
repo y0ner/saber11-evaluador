@@ -1,4 +1,4 @@
-// App logic for Saber 11 Evaluador de Respuestas
+// App logic for Saber 11 Evaluador de Respuestas - iPhone & Mobile Persistence Optimized
 document.addEventListener('DOMContentLoaded', () => {
   const data = window.CUADERNILLOS_DATA || {};
   
@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const totalCountEl = document.getElementById('total-count');
   const flaggedCountEl = document.getElementById('flagged-count');
   const progressFill = document.getElementById('progress-fill');
+  const saveStatusEl = document.getElementById('save-status');
+
+  const mobileGradeBtn = document.getElementById('mobile-grade-btn');
+  const mobileResetBtn = document.getElementById('mobile-reset-btn');
+  const mobileAnsCount = document.getElementById('mobile-ans-count');
+  const mobileTotalCount = document.getElementById('mobile-total-count');
 
   const tabGrid = document.getElementById('tab-grid');
   const tabFocus = document.getElementById('tab-focus');
@@ -41,9 +47,106 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetAnswersBtn = document.getElementById('reset-answers-btn');
   const retryBtn = document.getElementById('retry-btn');
 
+  // IndexedDB + LocalStorage Dual-Storage Manager
+  const DB_NAME = 'Saber11_DB';
+  const STORE_NAME = 'user_responses';
+
+  function initIndexedDB() {
+    return new Promise((resolve) => {
+      if (!window.indexedDB) return resolve(null);
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'bookletId' });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  async function saveState() {
+    const payload = {
+      bookletId: currentBookletId,
+      userAnswers,
+      flaggedQuestions,
+      timerSeconds,
+      timestamp: Date.now()
+    };
+
+    // 1. Save to LocalStorage (Immediate synchronous backup)
+    try {
+      localStorage.setItem(`saber11_state_${currentBookletId}`, JSON.stringify(payload));
+      localStorage.setItem('saber11_last_booklet', currentBookletId);
+    } catch (e) {
+      console.warn('LocalStorage error:', e);
+    }
+
+    // 2. Save to IndexedDB (Persistent browser database)
+    const db = await initIndexedDB();
+    if (db) {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(payload);
+      } catch (e) {
+        console.warn('IndexedDB error:', e);
+      }
+    }
+
+    // Visual save badge indicator
+    if (saveStatusEl) {
+      saveStatusEl.innerHTML = '🟢 Guardado en tu iPhone';
+      saveStatusEl.style.opacity = '1';
+    }
+  }
+
+  async function loadState(id) {
+    // Try LocalStorage first
+    let loadedData = null;
+    const local = localStorage.getItem(`saber11_state_${id}`);
+    if (local) {
+      try { loadedData = JSON.parse(local); } catch (e) {}
+    }
+
+    // Fallback to IndexedDB if local is empty
+    if (!loadedData) {
+      const db = await initIndexedDB();
+      if (db) {
+        try {
+          loadedData = await new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.get(id);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+          });
+        } catch (e) {}
+      }
+    }
+
+    if (loadedData) {
+      userAnswers = loadedData.userAnswers || {};
+      flaggedQuestions = loadedData.flaggedQuestions || {};
+      timerSeconds = loadedData.timerSeconds || 0;
+      timerDisplay.textContent = formatTime(timerSeconds);
+    } else {
+      userAnswers = {};
+      flaggedQuestions = {};
+      timerSeconds = 0;
+      timerDisplay.textContent = '00:00:00';
+    }
+  }
+
   // Populate Booklet Select
   function initBookletSelect() {
     bookletSelect.innerHTML = '';
+    const lastBooklet = localStorage.getItem('saber11_last_booklet');
+    if (lastBooklet && data[lastBooklet]) {
+      currentBookletId = lastBooklet;
+    }
+
     Object.values(data).forEach(item => {
       const opt = document.createElement('option');
       opt.value = item.id;
@@ -54,26 +157,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load Selected Booklet State
-  function loadBooklet(id) {
+  async function loadBooklet(id) {
     if (!data[id]) return;
     currentBookletId = id;
     currentBooklet = data[id];
-    
-    // Restore from localStorage if exists
-    const savedState = localStorage.getItem(`saber11_state_${currentBookletId}`);
-    if (savedState) {
-      try {
-        const parsed = JSON.parse(savedState);
-        userAnswers = parsed.userAnswers || {};
-        flaggedQuestions = parsed.flaggedQuestions || {};
-      } catch (e) {
-        userAnswers = {};
-        flaggedQuestions = {};
-      }
-    } else {
-      userAnswers = {};
-      flaggedQuestions = {};
-    }
+
+    await loadState(currentBookletId);
 
     activeFocusQ = 1;
     updateHeaderInfo();
@@ -81,13 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderFocus();
     updateProgress();
     viewResults.classList.add('hidden');
-  }
-
-  function saveState() {
-    localStorage.setItem(`saber11_state_${currentBookletId}`, JSON.stringify({
-      userAnswers,
-      flaggedQuestions
-    }));
   }
 
   function updateHeaderInfo() {
@@ -105,6 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
     totalCountEl.textContent = total;
     flaggedCountEl.textContent = flaggedCount;
 
+    if (mobileAnsCount) mobileAnsCount.textContent = answeredCount;
+    if (mobileTotalCount) mobileTotalCount.textContent = total;
+
     const percent = total > 0 ? (answeredCount / total) * 100 : 0;
     progressFill.style.width = `${percent}%`;
   }
@@ -119,7 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const isAnswered = !!userAnswers[q];
       const isFlagged = !!flaggedQuestions[q];
 
-      // Filter check
       if (activeGridFilter === 'answered' && !isAnswered) continue;
       if (activeGridFilter === 'pending' && isAnswered) continue;
       if (activeGridFilter === 'flagged' && !isFlagged) continue;
@@ -189,10 +273,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const isAnswered = !!userAnswers[activeFocusQ];
     const isFlagged = !!flaggedQuestions[activeFocusQ];
 
-    focusQStatus.textContent = isAnswered ? `Respondida (${userAnswers[activeFocusQ]})` : 'Pendiente';
+    focusQStatus.textContent = isAnswered ? `Marcada (${userAnswers[activeFocusQ]})` : 'Pendiente';
     focusQStatus.style.color = isAnswered ? 'var(--accent-primary)' : 'var(--text-muted)';
 
-    focusFlagBtn.textContent = isFlagged ? '🚩 Marcada' : '🏳️ Marcar para revisar';
+    focusFlagBtn.textContent = isFlagged ? '🚩 Marcada' : '🏳️ Marcar';
 
     // Options
     focusOptionsContainer.innerHTML = '';
@@ -297,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
       timerInterval = setInterval(() => {
         timerSeconds++;
         timerDisplay.textContent = formatTime(timerSeconds);
+        if (timerSeconds % 10 === 0) saveState(); // periodic auto-save
       }, 1000);
       isTimerRunning = true;
       timerToggleBtn.textContent = '⏸️';
@@ -310,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timerSeconds = 0;
     timerDisplay.textContent = '00:00:00';
     timerToggleBtn.textContent = '▶️';
+    saveState();
   });
 
   // Tab Switch (Grid vs Focus)
@@ -340,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Reset Answers
-  resetAnswersBtn.addEventListener('click', () => {
+  function handleReset() {
     if (confirm('¿Estás seguro de reiniciar todas tus respuestas de este cuadernillo?')) {
       userAnswers = {};
       flaggedQuestions = {};
@@ -350,11 +436,12 @@ document.addEventListener('DOMContentLoaded', () => {
       renderFocus();
       viewResults.classList.add('hidden');
     }
-  });
+  }
+
+  resetAnswersBtn.addEventListener('click', handleReset);
+  if (mobileResetBtn) mobileResetBtn.addEventListener('click', handleReset);
 
   // GRADING LOGIC & RESULTS VIEW
-  gradeBtn.addEventListener('click', gradeTest);
-
   function gradeTest() {
     const total = currentBooklet.total_questions;
     const officialAnswers = currentBooklet.answers || {};
@@ -409,19 +496,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (percent >= 88) {
       badgeEl.className = 'score-title-badge badge-excellent';
       badgeEl.textContent = '🌟 Nivel Sobresaliente';
-      feedbackEl.textContent = '¡Excelente dominio del cuadernillo! Demuestras una gran capacidad de análisis crítico y lectura profunda.';
+      feedbackEl.textContent = '¡Excelente dominio del cuadernillo! Gran capacidad de análisis crítico.';
     } else if (percent >= 70) {
       badgeEl.className = 'score-title-badge badge-good';
       badgeEl.textContent = '🚀 Alto Desempeño';
-      feedbackEl.textContent = '¡Muy buen resultado! Tienes bases sólidas. Revisa las respuestas incorrectas para perfeccionar tus puntos débiles.';
+      feedbackEl.textContent = '¡Muy buen resultado! Revisa las respuestas incorrectas para afianzar conceptos.';
     } else if (percent >= 50) {
       badgeEl.className = 'score-title-badge badge-warning';
       badgeEl.textContent = '👍 Desempeño Medio';
-      feedbackEl.textContent = 'Buen avance. Identifica los patrones en las preguntas falladas para reforzar la competencia de lectura crítica.';
+      feedbackEl.textContent = 'Buen avance. Revisa la clave oficial inferior para reforzar fallas.';
     } else {
       badgeEl.className = 'score-title-badge badge-danger';
       badgeEl.textContent = '📚 Necesita Refuerzo';
-      feedbackEl.textContent = 'No te preocupes, este cuadernillo es para aprender. Revisa detalladamente la clave oficial en la tabla inferior.';
+      feedbackEl.textContent = 'Tranquilo, este cuadernillo es para aprender. Revisa las respuestas correctas.';
     }
 
     document.getElementById('res-stat-correct').textContent = correctCount;
@@ -436,6 +523,9 @@ document.addEventListener('DOMContentLoaded', () => {
     viewResults.classList.remove('hidden');
     viewResults.scrollIntoView({ behavior: 'smooth' });
   }
+
+  gradeBtn.addEventListener('click', gradeTest);
+  if (mobileGradeBtn) mobileGradeBtn.addEventListener('click', gradeTest);
 
   function renderResultsTable(resultsData) {
     const tbody = document.getElementById('results-table-body');
@@ -468,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${badgeHtml}</td>
         <td>${correctBadgeHtml}</td>
         <td>${statusHtml}</td>
-        <td style="color: var(--text-muted); max-width: 400px;">${item.competencia}</td>
+        <td style="color: var(--text-muted); max-width: 320px;">${item.competencia}</td>
       `;
 
       tbody.appendChild(tr);
