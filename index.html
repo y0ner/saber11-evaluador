@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saber 11 - Evaluador & Registro de Respuestas ICFES</title>
+  <meta name="description" content="App para registrar respuestas de cuadernillos Saber 11 (Lectura Crítica, Matemáticas, Ciencias, Sociales, Inglés) y compararlas automáticamente con el solucionario oficial.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="container header-content">
+      <div class="brand">
+        <div class="brand-icon">📝</div>
+        <div>
+          <h1 class="brand-title">Saber 11 Evaluador</h1>
+          <p class="brand-subtitle">Cuadernillos ICFES & Solucionario Automático</p>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="select-wrapper">
+          <select id="cuadernillo-select" class="select-input" aria-label="Seleccionar Cuadernillo">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <div class="timer-widget">
+          <span>⏱️</span>
+          <span id="timer-display" class="timer-time">00:00:00</span>
+          <button id="timer-toggle-btn" class="btn-icon" title="Iniciar/Pausar Cronómetro">▶️</button>
+          <button id="timer-reset-btn" class="btn-icon" title="Reiniciar Cronómetro">🔄</button>
+        </div>
+
+        <a id="open-pdf-link" class="pdf-btn" href="#" target="_blank" title="Abrir PDF en una pestaña nueva">
+          📄 Abrir PDF
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container dashboard-grid">
+
+    <!-- Top Control Bar / Progress Card -->
+    <div class="toolbar-card">
+      <div class="progress-header">
+        <div>
+          <strong id="active-booklet-name">Lectura Crítica - Saber 11 (2026)</strong>
+          <span id="active-booklet-count" class="text-muted">(49 preguntas)</span>
+        </div>
+        <div class="progress-stats">
+          <span class="stat-pill"><span id="answered-count">0</span>/ <span id="total-count">49</span> respondidas</span>
+          <span class="stat-pill">🚩 <strong id="flagged-count">0</strong> marcadas</span>
+        </div>
+      </div>
+
+      <div class="progress-bar-bg">
+        <div id="progress-fill" class="progress-bar-fill"></div>
+      </div>
+
+      <div class="toolbar-actions">
+        <!-- Mode Switch Tabs -->
+        <div class="tab-group" role="tablist">
+          <button id="tab-grid" class="tab-btn active" role="tab" aria-selected="true">
+            <span>📱</span> Hoja OMR (Grid)
+          </button>
+          <button id="tab-focus" class="tab-btn" role="tab" aria-selected="false">
+            <span>🎯</span> Modo Enfoque
+          </button>
+        </div>
+
+        <!-- Filter Pills for Grid -->
+        <div class="tab-group" id="filter-group">
+          <button class="tab-btn active filter-btn" data-filter="all">Todas</button>
+          <button class="tab-btn filter-btn" data-filter="answered">Respondidas</button>
+          <button class="tab-btn filter-btn" data-filter="pending">Pendientes</button>
+          <button class="tab-btn filter-btn" data-filter="flagged">Marcadas 🚩</button>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button id="reset-answers-btn" class="btn-secondary">🗑️ Limpiar</button>
+          <button id="grade-btn" class="btn-primary">
+            ✨ Finalizar y Calificar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 1: GRID MODE (HOJA DE RESPUESTAS) -->
+    <section id="view-grid" class="grid-container animate-fade">
+      <!-- Question cards injected via JS -->
+    </section>
+
+    <!-- VIEW 2: FOCUS MODE (PASO A PASO) -->
+    <section id="view-focus" class="focus-container animate-fade hidden">
+      <div class="focus-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="focus-title" id="focus-q-num">Pregunta 1</span>
+          <span id="focus-q-status" class="stat-pill">Pendiente</span>
+        </div>
+        <button id="focus-flag-btn" class="btn-secondary">🚩 Marcar para revisar</button>
+      </div>
+
+      <p class="text-muted">Selecciona tu respuesta marcando la opción correspondiente en tu cuadernillo impreso o PDF:</p>
+
+      <div class="focus-options-grid" id="focus-options-container">
+        <!-- Option buttons A, B, C, D injected via JS -->
+      </div>
+
+      <div class="focus-nav">
+        <button id="focus-prev-btn" class="btn-secondary">⬅️ Anterior</button>
+        <div class="mini-map" id="focus-minimap">
+          <!-- Minimap items -->
+        </div>
+        <button id="focus-next-btn" class="btn-secondary">Siguiente ➡️</button>
+      </div>
+    </section>
+
+    <!-- VIEW 3: RESULTS SECTION (APARECE AL CALIFICAR) -->
+    <section id="view-results" class="results-card animate-fade hidden">
+      <div class="score-banner">
+        <div class="score-circle" id="score-circle-graph">
+          <div class="score-inner">
+            <span id="score-percent" class="score-val">0%</span>
+            <span class="score-lbl">Aciertos</span>
+          </div>
+        </div>
+
+        <div class="score-details">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="score-badge" class="score-title-badge badge-good">Resultado Obtenido</span>
+            <span id="score-fraction" class="font-heading" style="font-size: 1.2rem; font-weight: 700;">0 de 0 correctas</span>
+          </div>
+
+          <p id="score-feedback" class="text-muted" style="font-size: 0.95rem;">
+            Aquí aparecerá la retroalimentación de tu desempeño.
+          </p>
+
+          <div class="stats-grid-4">
+            <div class="stat-card">
+              <span id="res-stat-correct" class="stat-card-val" style="color: var(--success)">0</span>
+              <span class="stat-card-lbl">Correctas</span>
+            </div>
+            <div class="stat-card">
+              <span id="res-stat-wrong" class="stat-card-val" style="color: var(--danger)">0</span>
+              <span class="stat-card-lbl">Incorrectas</span>
+            </div>
+            <div class="stat-card">
+              <span id="res-stat-omitted" class="stat-card-val" style="color: var(--text-muted)">0</span>
+              <span class="stat-card-lbl">Sin responder</span>
+            </div>
+            <div class="stat-card">
+              <span id="res-stat-time" class="stat-card-val" style="color: #38bdf8">00:00</span>
+              <span class="stat-card-lbl">Tiempo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters & Actions for Table -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+        <h3 class="font-heading" style="font-size: 1.3rem;">Desglose Detallado por Pregunta</h3>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div class="tab-group" id="results-filter-group">
+            <button class="tab-btn active res-filter-btn" data-res-filter="all">Todas</button>
+            <button class="tab-btn res-filter-btn" data-res-filter="wrong">Solo Incorrectas ❌</button>
+            <button class="tab-btn res-filter-btn" data-res-filter="correct">Solo Correctas ✅</button>
+          </div>
+          <button id="retry-btn" class="btn-secondary">🔄 Volver a Intentar</button>
+        </div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="table-wrapper">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th># Pregunta</th>
+              <th>Tu Respuesta</th>
+              <th>Clave Oficial PDF</th>
+              <th>Estado</th>
+              <th>Afirmación / Competencia Evaluada</th>
+            </tr>
+          </thead>
+          <tbody id="results-table-body">
+            <!-- Injected via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Load database script & main app logic -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
