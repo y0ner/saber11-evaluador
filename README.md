@@ -1,4 +1,12 @@
-# Saber 11 - Evaluador & Registro de Respuestas ICFES 📚⚡
+<div align="center">
+
+![Saber 11 Banner](https://capsule-render.vercel.app/api?type=waving&color=1e293b&height=250&section=header&text=Saber%2011&fontSize=80&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=Evaluador%20y%20registro%20de%20respuestas%20ICFES&descAlignY=55&descSize=20)
+
+[![Estado del Proyecto](https://img.shields.io/badge/Estado-Activo-success?style=for-the-badge)](https://github.com/y0ner/saber11-evaluador)
+[![Mantenimiento](https://img.shields.io/badge/Mantenimiento-Continuo-blue?style=for-the-badge)](https://github.com/y0ner/saber11-evaluador)
+[![Stack](https://img.shields.io/badge/Stack-HTML%20%C2%B7%20CSS%20%C2%B7%20JavaScript-orange?style=for-the-badge)](https://github.com/y0ner/saber11-evaluador)
+
+</div>
 
 Una aplicación web moderna, interactiva y rápida para practicar con cuadernillos del **ICFES Saber 11** (Lectura Crítica, Matemáticas, Ciencias Naturales, Sociales e Inglés). 
 
@@ -52,4 +60,6 @@ Permite registrar tus respuestas pregunta por pregunta y compararlas en tiempo r
 
 ---
 
-Desarrollado con ❤️ para preparación ICFES Saber 11.
+<div align="center">
+  <i>Desarrollado y mantenido con estándares de calidad técnica por <a href="https://github.com/y0ner">y0ner</a></i>
+</div>
